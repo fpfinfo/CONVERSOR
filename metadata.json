@@ -1,0 +1,5 @@
+{
+  "name": "CONVERSOR SEFIN",
+  "description": "Conversor de arquivos XLSM, CSV e PDF para formato CSV padronizado (aspas duplas e vírgula) para o TJPA.",
+  "requestFramePermissions": []
+}
