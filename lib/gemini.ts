@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 
 const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
-export async function convertPdfToCsv(base64Data: string, mimeType: string): Promise<string> {
+export async function convertFileToCsv(base64Data: string, mimeType: string): Promise<string> {
   if (!apiKey) {
     throw new Error("NEXT_PUBLIC_GEMINI_API_KEY is not set");
   }
@@ -10,8 +10,11 @@ export async function convertPdfToCsv(base64Data: string, mimeType: string): Pro
   const ai = new GoogleGenAI({ apiKey });
   const model = "gemini-3-flash-preview";
 
+  const isImage = mimeType.startsWith('image/');
+  const fileTypeLabel = isImage ? 'esta imagem' : 'este documento PDF';
+
   const prompt = `
-    Extraia todos os dados tabulares deste documento PDF e converta para o formato CSV.
+    Extraia todos os dados tabulares de ${fileTypeLabel} e converta para o formato CSV.
     REGRAS IMPORTANTES:
     1. Use vírgula (,) como separador.
     2. Coloque TODOS os valores entre aspas duplas (ex: "valor1","valor2").
@@ -42,7 +45,7 @@ export async function convertPdfToCsv(base64Data: string, mimeType: string): Pro
     // Clean up markdown code blocks if present
     return text.replace(/```csv\n?|```/g, "").trim();
   } catch (error) {
-    console.error("Error converting PDF to CSV:", error);
-    throw new Error("Falha ao processar o PDF com IA.");
+    console.error("Error converting file to CSV:", error);
+    throw new Error(`Falha ao processar ${isImage ? 'a imagem' : 'o PDF'} com IA.`);
   }
 }
