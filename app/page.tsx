@@ -3,6 +3,7 @@
 import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import Image from 'next/image';
+import JSZip from 'jszip';
 import { 
   FileUp, 
   FileText, 
@@ -21,7 +22,11 @@ import {
   Settings,
   Menu,
   X,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Eye,
+  Eraser,
+  Bell,
+  Archive
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
@@ -36,10 +41,19 @@ function cn(...inputs: ClassValue[]) {
 
 interface FileStatus {
   id: string;
-  file: File;
+  file?: File; // Optional because persisted files won't have the original File object
+  name: string;
+  size: number;
+  type: string;
   status: 'idle' | 'processing' | 'completed' | 'error';
   result?: string;
   error?: string;
+}
+
+interface Toast {
+  id: string;
+  message: string;
+  type: 'success' | 'error' | 'info';
 }
 
 const SIDEBAR_ITEMS = [
@@ -51,30 +65,72 @@ export default function ConversorSefin() {
   const [isProcessingAll, setIsProcessingAll] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [animateIcon, setAnimateIcon] = useState(false);
+  const [previewData, setPreviewData] = useState<{ name: string, data: any[] } | null>(null);
+  const [toasts, setToasts] = useState<Toast[]>([]);
 
   const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
+
+  // Load persistence
+  React.useEffect(() => {
+    const saved = localStorage.getItem('conversor_sefin_files');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // Only keep completed or error files as they have the results/errors
+        setFiles(parsed.filter((f: any) => f.status === 'completed' || f.status === 'error'));
+      } catch (e) {
+        console.error("Failed to load saved files", e);
+      }
+    }
+  }, []);
+
+  // Save persistence
+  React.useEffect(() => {
+    const toSave = files
+      .filter(f => f.status === 'completed' || f.status === 'error')
+      .map(({ file, ...rest }) => rest);
+    localStorage.setItem('conversor_sefin_files', JSON.stringify(toSave));
+  }, [files]);
+
+  const addToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    const id = Math.random().toString(36).substring(7);
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 3000);
+  };
 
   const onDrop = useCallback((acceptedFiles: File[], fileRejections: any[]) => {
     const newFiles = acceptedFiles.map(file => ({
       id: Math.random().toString(36).substring(7),
       file,
+      name: file.name,
+      size: file.size,
+      type: file.type,
       status: 'idle' as const,
     }));
 
     const rejectedFiles = fileRejections.map(rejection => ({
       id: Math.random().toString(36).substring(7),
-      file: rejection.file,
+      name: rejection.file.name,
+      size: rejection.file.size,
+      type: rejection.file.type,
       status: 'error' as const,
       error: rejection.errors[0].code === 'file-too-large' 
         ? 'Arquivo excede o limite de 100MB' 
         : 'Formato não suportado'
     }));
 
+    if (fileRejections.length > 0) {
+      addToast(`${fileRejections.length} arquivo(s) rejeitado(s)`, 'error');
+    }
+
     setFiles(prev => [...prev, ...newFiles, ...rejectedFiles]);
     
     if (acceptedFiles.length > 0) {
       setAnimateIcon(true);
       setTimeout(() => setAnimateIcon(false), 500);
+      addToast(`${acceptedFiles.length} arquivo(s) adicionado(s)`);
     }
   }, []);
 
@@ -95,14 +151,27 @@ export default function ConversorSefin() {
     setFiles(prev => prev.filter(f => f.id !== id));
   };
 
+  const clearQueue = (onlyCompleted = false) => {
+    if (onlyCompleted) {
+      setFiles(prev => prev.filter(f => f.status !== 'completed'));
+      addToast("Arquivos concluídos removidos");
+    } else {
+      setFiles([]);
+      addToast("Fila limpa");
+    }
+  };
+
   const processFile = async (fileStatus: FileStatus) => {
-    const { file, id } = fileStatus;
+    const { file, id, name, type } = fileStatus;
+    if (!file && fileStatus.status === 'idle') return; // Should not happen for idle files
+
     setFiles(prev => prev.map(f => f.id === id ? { ...f, status: 'processing' } : f));
 
     try {
       let csvResult = '';
 
-      if (file.name.endsWith('.xlsm') || file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+      if (name.endsWith('.xlsm') || name.endsWith('.xlsx') || name.endsWith('.xls')) {
+        if (!file) throw new Error("Arquivo não encontrado na memória");
         const data = await file.arrayBuffer();
         const workbook = XLSX.read(data);
         const firstSheetName = workbook.SheetNames[0];
@@ -113,7 +182,8 @@ export default function ConversorSefin() {
           quotes: true,
           delimiter: ",",
         });
-      } else if (file.name.endsWith('.csv')) {
+      } else if (name.endsWith('.csv')) {
+        if (!file) throw new Error("Arquivo não encontrado na memória");
         const text = await file.text();
         const parsed = Papa.parse(text, { skipEmptyLines: true });
         
@@ -121,7 +191,8 @@ export default function ConversorSefin() {
           quotes: true,
           delimiter: ",",
         });
-      } else if (file.type.startsWith('image/') || file.name.endsWith('.pdf')) {
+      } else if (type.startsWith('image/') || name.endsWith('.pdf')) {
+        if (!file) throw new Error("Arquivo não encontrado na memória");
         const base64 = await new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onload = () => {
@@ -131,7 +202,7 @@ export default function ConversorSefin() {
           reader.readAsDataURL(file);
         });
         
-        csvResult = await convertFileToCsv(base64, file.type);
+        csvResult = await convertFileToCsv(base64, type);
       }
 
       setFiles(prev => prev.map(f => f.id === id ? { 
@@ -139,13 +210,15 @@ export default function ConversorSefin() {
         status: 'completed', 
         result: csvResult 
       } : f));
+      addToast(`Sucesso: ${name}`, 'success');
     } catch (error: any) {
-      console.error(`Error processing ${file.name}:`, error);
+      console.error(`Error processing ${name}:`, error);
       setFiles(prev => prev.map(f => f.id === id ? { 
         ...f, 
         status: 'error', 
         error: error.message || 'Erro desconhecido' 
       } : f));
+      addToast(`Erro: ${name}`, 'error');
     }
   };
 
@@ -165,10 +238,39 @@ export default function ConversorSefin() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `${fileStatus.file.name.split('.')[0]}_convertido.csv`);
+    link.setAttribute('download', `${fileStatus.name.split('.')[0]}_convertido.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const downloadAllZip = async () => {
+    const completedFiles = files.filter(f => f.status === 'completed' && f.result);
+    if (completedFiles.length === 0) return;
+
+    const zip = new JSZip();
+    completedFiles.forEach(f => {
+      zip.file(`${f.name.split('.')[0]}_convertido.csv`, f.result!);
+    });
+
+    const content = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(content);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `CONVERSOR_SEFIN_LOTE_${new Date().getTime()}.zip`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    addToast("ZIP gerado com sucesso", 'success');
+  };
+
+  const openPreview = (fileStatus: FileStatus) => {
+    if (!fileStatus.result) return;
+    const parsed = Papa.parse(fileStatus.result, { header: false });
+    setPreviewData({
+      name: fileStatus.name,
+      data: parsed.data.slice(0, 11) as any[] // Header + 10 rows
+    });
   };
 
   return (
@@ -329,14 +431,33 @@ export default function ConversorSefin() {
                     <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Fila de Processamento</h3>
                     <span className="px-2 py-0.5 bg-slate-200 text-slate-600 rounded-md text-[10px] font-bold">{files.length}</span>
                   </div>
-                  <button 
-                    onClick={processAll}
-                    disabled={isProcessingAll || files.every(f => f.status !== 'idle')}
-                    className="px-8 py-3 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-emerald-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300 shadow-xl shadow-slate-200 flex items-center gap-3"
-                  >
-                    {isProcessingAll ? <Loader2 className="animate-spin" size={16} /> : <FileSpreadsheet size={16} />}
-                    Processar Todos
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {files.some(f => f.status === 'completed') && (
+                      <>
+                        <button 
+                          onClick={() => clearQueue(true)}
+                          className="px-4 py-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                        >
+                          Limpar Concluídos
+                        </button>
+                        <button 
+                          onClick={downloadAllZip}
+                          className="px-6 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-100 transition-all flex items-center gap-2"
+                        >
+                          <Archive size={14} />
+                          Baixar Tudo (ZIP)
+                        </button>
+                      </>
+                    )}
+                    <button 
+                      onClick={processAll}
+                      disabled={isProcessingAll || files.every(f => f.status !== 'idle')}
+                      className="px-8 py-3 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-emerald-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300 shadow-xl shadow-slate-200 flex items-center gap-3"
+                    >
+                      {isProcessingAll ? <Loader2 className="animate-spin" size={16} /> : <FileSpreadsheet size={16} />}
+                      Processar Todos
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid gap-4">
@@ -351,24 +472,24 @@ export default function ConversorSefin() {
                     >
                       <div className={cn(
                         "w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105",
-                        fileStatus.file.name.endsWith('.pdf') ? "bg-red-50 text-red-500" : 
-                        fileStatus.file.type.startsWith('image/') ? "bg-amber-50 text-amber-500" :
-                        (fileStatus.file.name.endsWith('.xlsm') || fileStatus.file.name.endsWith('.xlsx') || fileStatus.file.name.endsWith('.xls')) ? "bg-emerald-50 text-emerald-500" : "bg-blue-50 text-blue-500"
+                        fileStatus.name.endsWith('.pdf') ? "bg-red-50 text-red-500" : 
+                        fileStatus.type.startsWith('image/') ? "bg-amber-50 text-amber-500" :
+                        (fileStatus.name.endsWith('.xlsm') || fileStatus.name.endsWith('.xlsx') || fileStatus.name.endsWith('.xls')) ? "bg-emerald-50 text-emerald-500" : "bg-blue-50 text-blue-500"
                       )}>
-                        {fileStatus.file.name.endsWith('.pdf') ? <FileText size={32} /> : 
-                         fileStatus.file.type.startsWith('image/') ? <ImageIcon size={32} /> :
+                        {fileStatus.name.endsWith('.pdf') ? <FileText size={32} /> : 
+                         fileStatus.type.startsWith('image/') ? <ImageIcon size={32} /> :
                          <FileSpreadsheet size={32} />}
                       </div>
                       
                       <div className="flex-1 min-w-0">
-                        <p className="text-lg font-black text-slate-800 truncate uppercase tracking-tight">{fileStatus.file.name}</p>
+                        <p className="text-lg font-black text-slate-800 truncate uppercase tracking-tight">{fileStatus.name}</p>
                         <div className="flex items-center gap-3 mt-1">
                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                            {(fileStatus.file.size / 1024).toFixed(1)} KB
+                            {(fileStatus.size / 1024).toFixed(1)} KB
                           </span>
                           <div className="w-1 h-1 bg-slate-200 rounded-full" />
                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                            {fileStatus.file.name.split('.').pop()}
+                            {fileStatus.name.split('.').pop()}
                           </span>
                         </div>
                       </div>
@@ -396,6 +517,13 @@ export default function ConversorSefin() {
                             <div className="w-10 h-10 flex items-center justify-center bg-emerald-100 text-emerald-600 rounded-full">
                               <CheckCircle2 size={24} />
                             </div>
+                            <button 
+                              onClick={() => openPreview(fileStatus)}
+                              className="p-3 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all"
+                              title="Visualizar"
+                            >
+                              <Eye size={20} />
+                            </button>
                             <button 
                               onClick={() => downloadFile(fileStatus)}
                               className="flex items-center gap-3 px-6 py-3 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
@@ -444,6 +572,112 @@ export default function ConversorSefin() {
             </motion.div>
           )}
         </main>
+      </div>
+
+      {/* Preview Modal */}
+      <AnimatePresence>
+        {previewData && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setPreviewData(null)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-4xl bg-white rounded-[3rem] shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
+            >
+              <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Pré-visualização</h3>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">{previewData.name}</p>
+                </div>
+                <button 
+                  onClick={() => setPreviewData(null)}
+                  className="w-12 h-12 flex items-center justify-center bg-white text-slate-400 hover:text-red-500 rounded-2xl shadow-sm transition-all"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+              
+              <div className="flex-1 overflow-auto p-8">
+                <div className="border border-slate-100 rounded-2xl overflow-hidden">
+                  <table className="w-full text-left text-sm border-collapse">
+                    <thead className="bg-slate-50 border-b border-slate-100">
+                      <tr>
+                        {previewData.data[0]?.map((cell: any, i: number) => (
+                          <th key={i} className="px-4 py-3 font-black text-slate-600 uppercase tracking-widest text-[10px]">
+                            {cell || `Col ${i+1}`}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {previewData.data.slice(1).map((row, i) => (
+                        <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                          {row.map((cell: any, j: number) => (
+                            <td key={j} className="px-4 py-3 text-slate-600 font-medium">
+                              {cell}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-4 text-center">
+                  Exibindo as primeiras 10 linhas do arquivo convertido
+                </p>
+              </div>
+
+              <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex justify-end">
+                <button 
+                  onClick={() => setPreviewData(null)}
+                  className="px-8 py-3 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-emerald-600 transition-all"
+                >
+                  Fechar Visualização
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Toast Notifications */}
+      <div className="fixed bottom-8 right-8 z-[60] flex flex-col gap-3 pointer-events-none">
+        <AnimatePresence>
+          {toasts.map(toast => (
+            <motion.div
+              key={toast.id}
+              initial={{ opacity: 0, x: 50, scale: 0.9 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
+              className={cn(
+                "pointer-events-auto px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 min-w-[300px] border",
+                toast.type === 'success' ? "bg-emerald-600 text-white border-emerald-500" :
+                toast.type === 'error' ? "bg-red-600 text-white border-red-500" :
+                "bg-slate-900 text-white border-slate-800"
+              )}
+            >
+              <div className="shrink-0">
+                {toast.type === 'success' ? <CheckCircle2 size={20} /> :
+                 toast.type === 'error' ? <AlertCircle size={20} /> :
+                 <Bell size={20} />}
+              </div>
+              <p className="text-sm font-bold tracking-tight">{toast.message}</p>
+              <button 
+                onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
+                className="ml-auto p-1 hover:bg-white/20 rounded-lg transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
     </div>
   );
