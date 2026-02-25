@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import Image from 'next/image';
-import JSZip from 'jszip';
 import { 
   FileUp, 
   FileText, 
@@ -26,14 +25,18 @@ import {
   Eye,
   Eraser,
   Bell,
-  Archive
+  Archive,
+  FileStack
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
+import JSZip from 'jszip';
 import { convertFileToCsv } from '@/lib/gemini';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { PreviewModal } from '@/components/PreviewModal';
+import { ToastContainer, type Toast } from '@/components/ToastContainer';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -48,12 +51,6 @@ interface FileStatus {
   status: 'idle' | 'processing' | 'completed' | 'error';
   result?: string;
   error?: string;
-}
-
-interface Toast {
-  id: string;
-  message: string;
-  type: 'success' | 'error' | 'info';
 }
 
 const SIDEBAR_ITEMS = [
@@ -71,7 +68,7 @@ export default function ConversorSefin() {
   const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 
   // Load persistence
-  React.useEffect(() => {
+  useEffect(() => {
     const saved = localStorage.getItem('conversor_sefin_files');
     if (saved) {
       try {
@@ -85,7 +82,7 @@ export default function ConversorSefin() {
   }, []);
 
   // Save persistence
-  React.useEffect(() => {
+  useEffect(() => {
     const toSave = files
       .filter(f => f.status === 'completed' || f.status === 'error')
       .map(({ file, ...rest }) => rest);
@@ -163,7 +160,7 @@ export default function ConversorSefin() {
 
   const processFile = async (fileStatus: FileStatus) => {
     const { file, id, name, type } = fileStatus;
-    if (!file && fileStatus.status === 'idle') return; // Should not happen for idle files
+    if (!file && fileStatus.status === 'idle') return;
 
     setFiles(prev => prev.map(f => f.id === id ? { ...f, status: 'processing' } : f));
 
@@ -271,6 +268,42 @@ export default function ConversorSefin() {
       name: fileStatus.name,
       data: parsed.data.slice(0, 11) as any[] // Header + 10 rows
     });
+  };
+
+  const combineAndDownload = () => {
+    const completedFiles = files.filter(f => f.status === 'completed' && f.result);
+    if (completedFiles.length < 2) {
+      addToast("Adicione pelo menos 2 arquivos concluídos para mesclar", 'info');
+      return;
+    }
+
+    let combinedData: any[] = [];
+    
+    completedFiles.forEach((f, index) => {
+      const parsed = Papa.parse(f.result!, { header: false, skipEmptyLines: true });
+      if (index === 0) {
+        // Keep header from the first file
+        combinedData = parsed.data;
+      } else {
+        // Skip header for subsequent files
+        combinedData = [...combinedData, ...parsed.data.slice(1)];
+      }
+    });
+
+    const csvResult = Papa.unparse(combinedData, {
+      quotes: true,
+      delimiter: ",",
+    });
+
+    const blob = new Blob([csvResult], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `CONVERSOR_SEFIN_MESCLADO_${new Date().getTime()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    addToast("Arquivos mesclados com sucesso", 'success');
   };
 
   return (
@@ -447,6 +480,15 @@ export default function ConversorSefin() {
                           <Archive size={14} />
                           Baixar Tudo (ZIP)
                         </button>
+                        {files.filter(f => f.status === 'completed').length >= 2 && (
+                          <button 
+                            onClick={combineAndDownload}
+                            className="px-6 py-2 bg-blue-50 text-blue-700 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-100 transition-all flex items-center gap-2"
+                          >
+                            <FileStack size={14} />
+                            Mesclar e Baixar (CSV Único)
+                          </button>
+                        )}
                       </>
                     )}
                     <button 
@@ -575,110 +617,16 @@ export default function ConversorSefin() {
       </div>
 
       {/* Preview Modal */}
-      <AnimatePresence>
-        {previewData && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setPreviewData(null)}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-4xl bg-white rounded-[3rem] shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
-            >
-              <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                <div>
-                  <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Pré-visualização</h3>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">{previewData.name}</p>
-                </div>
-                <button 
-                  onClick={() => setPreviewData(null)}
-                  className="w-12 h-12 flex items-center justify-center bg-white text-slate-400 hover:text-red-500 rounded-2xl shadow-sm transition-all"
-                >
-                  <X size={24} />
-                </button>
-              </div>
-              
-              <div className="flex-1 overflow-auto p-8">
-                <div className="border border-slate-100 rounded-2xl overflow-hidden">
-                  <table className="w-full text-left text-sm border-collapse">
-                    <thead className="bg-slate-50 border-b border-slate-100">
-                      <tr>
-                        {previewData.data[0]?.map((cell: any, i: number) => (
-                          <th key={i} className="px-4 py-3 font-black text-slate-600 uppercase tracking-widest text-[10px]">
-                            {cell || `Col ${i+1}`}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {previewData.data.slice(1).map((row, i) => (
-                        <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                          {row.map((cell: any, j: number) => (
-                            <td key={j} className="px-4 py-3 text-slate-600 font-medium">
-                              {cell}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-4 text-center">
-                  Exibindo as primeiras 10 linhas do arquivo convertido
-                </p>
-              </div>
-
-              <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex justify-end">
-                <button 
-                  onClick={() => setPreviewData(null)}
-                  className="px-8 py-3 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-emerald-600 transition-all"
-                >
-                  Fechar Visualização
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <PreviewModal 
+        previewData={previewData} 
+        onClose={() => setPreviewData(null)} 
+      />
 
       {/* Toast Notifications */}
-      <div className="fixed bottom-8 right-8 z-[60] flex flex-col gap-3 pointer-events-none">
-        <AnimatePresence>
-          {toasts.map(toast => (
-            <motion.div
-              key={toast.id}
-              initial={{ opacity: 0, x: 50, scale: 0.9 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
-              className={cn(
-                "pointer-events-auto px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 min-w-[300px] border",
-                toast.type === 'success' ? "bg-emerald-600 text-white border-emerald-500" :
-                toast.type === 'error' ? "bg-red-600 text-white border-red-500" :
-                "bg-slate-900 text-white border-slate-800"
-              )}
-            >
-              <div className="shrink-0">
-                {toast.type === 'success' ? <CheckCircle2 size={20} /> :
-                 toast.type === 'error' ? <AlertCircle size={20} /> :
-                 <Bell size={20} />}
-              </div>
-              <p className="text-sm font-bold tracking-tight">{toast.message}</p>
-              <button 
-                onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
-                className="ml-auto p-1 hover:bg-white/20 rounded-lg transition-colors"
-              >
-                <X size={16} />
-              </button>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
+      <ToastContainer 
+        toasts={toasts} 
+        onClose={(id) => setToasts(prev => prev.filter(t => t.id !== id))} 
+      />
     </div>
   );
 }
