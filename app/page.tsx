@@ -32,7 +32,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
-import { saveAs } from 'file-saver';
 import { convertFileToCsv } from '@/lib/gemini';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -306,6 +305,39 @@ export default function ConversorCsv() {
   };
 
 
+  // Método corporativo definitivo para download
+  const downloadViaForm = (content: string, fileName: string, format: 'csv' | 'txt') => {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/api/download';
+    form.style.display = 'none';
+    
+    const contentInput = document.createElement('input');
+    contentInput.type = 'hidden';
+    contentInput.name = 'content';
+    contentInput.value = content;
+    
+    const fileNameInput = document.createElement('input');
+    fileNameInput.type = 'hidden';
+    fileNameInput.name = 'fileName';
+    fileNameInput.value = fileName;
+
+    const formatInput = document.createElement('input');
+    formatInput.type = 'hidden';
+    formatInput.name = 'format';
+    formatInput.value = format;
+
+    form.appendChild(contentInput);
+    form.appendChild(fileNameInput);
+    form.appendChild(formatInput);
+    document.body.appendChild(form);
+    form.submit();
+    
+    setTimeout(() => {
+      document.body.removeChild(form);
+    }, 100);
+  };
+
   const downloadFile = (fileStatus: FileStatus, format: 'csv' | 'txt' = 'csv') => {
     if (!fileStatus.result) return;
     
@@ -313,10 +345,7 @@ export default function ConversorCsv() {
     const fileName = `${fileStatus.name.replace(/\.[^/.]+$/, '')}_convertido.${extension}`;
     const content = cleanCsvResult(fileStatus.result);
     
-    const BOM = '\uFEFF';
-    const mimeType = format === 'txt' ? 'text/plain' : 'text/csv';
-    const blob = new Blob([BOM + content], { type: `${mimeType};charset=utf-8` });
-    saveAs(blob, fileName);
+    downloadViaForm(content, fileName, format);
   };
 
   const downloadAllZip = async (format: 'csv' | 'txt' = 'csv') => {
@@ -333,7 +362,24 @@ export default function ConversorCsv() {
     });
 
     const zipBlob = await zip.generateAsync({ type: 'blob' });
-    saveAs(zipBlob, `CONVERSOR_CSV_LOTE_${Date.now()}.zip`);
+    
+    // O JSZip cria BLOB, zip é mais seguro com objectURL ou formData?
+    // Formulários são ruins para blobs binários diretamente sem FormData+XHRequest.
+    // Vamos voltar o file-saver ou objectURL só pro ZIP, e POST /api pro CSV.
+    // Pra garantir, ZIP não tem problema no Edge com "a.download" pois é action restrita? 
+    // Na verdade, no caso de ZIP é binário. O file-saver ou URL é a única via local.
+    const url = window.URL.createObjectURL(zipBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `CONVERSOR_CSV_LOTE_${Date.now()}.zip`;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    }, 200);
+    
     addToast(`ZIP (${format.toUpperCase()}) gerado com sucesso`, 'success');
   };
 
@@ -383,10 +429,7 @@ export default function ConversorCsv() {
     const extension = format === 'csv' ? 'csv' : 'txt';
     const fileName = `CONVERSOR_CSV_MESCLADO_${Date.now()}.${extension}`;
 
-    const BOM = '\uFEFF';
-    const mimeType = format === 'txt' ? 'text/plain' : 'text/csv';
-    const blob = new Blob([BOM + resultString], { type: `${mimeType};charset=utf-8` });
-    saveAs(blob, fileName);
+    downloadViaForm(resultString, fileName, format);
     
     addToast(`Arquivos mesclados (${format.toUpperCase()}) com sucesso`, 'success');
   };
