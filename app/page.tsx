@@ -189,7 +189,7 @@ export default function ConversorCsv() {
         });
       } else if (name.endsWith('.csv')) {
         if (!file) throw new Error("Arquivo não encontrado na memória");
-        const text = await file.text();
+        const text = (await file.text()).replace(/^\uFEFF/, '');
         const parsed = Papa.parse(text, { skipEmptyLines: true });
         
         // Formata números para o padrão brasileiro (vírgula como separador decimal)
@@ -208,7 +208,7 @@ export default function ConversorCsv() {
           quotes: true,
           delimiter: ";",
         });
-      } else if (type.startsWith('image/') || name.endsWith('.pdf')) {
+      } else if ((type || '').startsWith('image/') || name.endsWith('.pdf')) {
         if (!file) throw new Error("Arquivo não encontrado na memória");
         const base64 = await new Promise<string>((resolve) => {
           const reader = new FileReader();
@@ -219,7 +219,16 @@ export default function ConversorCsv() {
           reader.readAsDataURL(file);
         });
         
-        csvResult = await convertFileToCsv(base64, type);
+        let finalType = type;
+        if (!finalType) {
+          if (name.endsWith('.pdf')) finalType = 'application/pdf';
+          else if (name.endsWith('.png')) finalType = 'image/png';
+          else if (name.endsWith('.jpg') || name.endsWith('.jpeg')) finalType = 'image/jpeg';
+          else if (name.endsWith('.webp')) finalType = 'image/webp';
+          else if (name.endsWith('.heic')) finalType = 'image/heic';
+          else if (name.endsWith('.heif')) finalType = 'image/heif';
+        }
+        csvResult = await convertFileToCsv(base64, finalType);
       }
 
       setFiles(prev => prev.map(f => f.id === id ? { 
@@ -528,11 +537,11 @@ export default function ConversorCsv() {
                       <div className={cn(
                         "w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105",
                         fileStatus.name.endsWith('.pdf') ? "bg-red-50 text-red-500" : 
-                        fileStatus.type.startsWith('image/') ? "bg-amber-50 text-amber-500" :
+                        (fileStatus.type || '').startsWith('image/') ? "bg-amber-50 text-amber-500" :
                         (fileStatus.name.endsWith('.xlsm') || fileStatus.name.endsWith('.xlsx') || fileStatus.name.endsWith('.xls')) ? "bg-emerald-50 text-emerald-500" : "bg-blue-50 text-blue-500"
                       )}>
                         {fileStatus.name.endsWith('.pdf') ? <FileText size={32} /> : 
-                         fileStatus.type.startsWith('image/') ? <ImageIcon size={32} /> :
+                         (fileStatus.type || '').startsWith('image/') ? <ImageIcon size={32} /> :
                          <FileSpreadsheet size={32} />}
                       </div>
                       
@@ -639,6 +648,13 @@ export default function ConversorCsv() {
             </motion.div>
           )}
         </main>
+
+        {/* Footer */}
+        <footer className="p-8 text-center border-t border-slate-100 bg-white/50">
+          <p className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-[0.2em] leading-relaxed">
+            @ Tribunal de Justiça do Estado do Pará - Laboratório de Inovação da SEFIN.
+          </p>
+        </footer>
       </div>
 
       {/* Preview Modal */}

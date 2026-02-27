@@ -10,7 +10,7 @@ export async function convertFileToCsv(base64Data: string, mimeType: string): Pr
   const ai = new GoogleGenAI({ apiKey });
   const model = "gemini-3-flash-preview";
 
-  const isImage = mimeType.startsWith('image/');
+  const isImage = (mimeType || '').startsWith('image/');
   const fileTypeLabel = isImage ? 'esta imagem' : 'este documento PDF';
 
   const prompt = `
@@ -28,19 +28,17 @@ export async function convertFileToCsv(base64Data: string, mimeType: string): Pr
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: [
-        {
-          parts: [
-            { text: prompt },
-            {
-              inlineData: {
-                data: base64Data,
-                mimeType: mimeType,
-              },
+      contents: {
+        parts: [
+          { text: prompt },
+          {
+            inlineData: {
+              data: base64Data,
+              mimeType: mimeType,
             },
-          ],
-        },
-      ],
+          },
+        ],
+      },
     });
 
     const text = response.text || "";
