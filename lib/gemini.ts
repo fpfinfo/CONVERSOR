@@ -14,13 +14,15 @@ export async function convertFileToCsv(base64Data: string, mimeType: string): Pr
   const fileTypeLabel = isImage ? 'esta imagem' : 'este documento PDF';
 
   const prompt = `
-    Extraia todos os dados tabulares de ${fileTypeLabel} e converta para o formato CSV.
-    REGRAS IMPORTANTES:
-    1. Use vírgula (,) como separador.
-    2. Coloque TODOS os valores entre aspas duplas (ex: "valor1","valor2").
-    3. Não inclua explicações, apenas o conteúdo do CSV.
-    4. Se houver múltiplas tabelas, tente consolidá-las se fizerem sentido juntas, ou extraia a principal.
-    5. Certifique-se de que a primeira linha seja o cabeçalho.
+    Extraia todos os dados tabulares de ${fileTypeLabel} e converta para o formato CSV seguindo o padrão brasileiro.
+    REGRAS OBRIGATÓRIAS:
+    1. Use PONTO E VÍRGULA (;) como delimitador/separador de colunas.
+    2. Use VÍRGULA (,) como separador decimal (ex: 1234,56).
+    3. Formate TODAS as datas como DD/MM/AAAA (ex: 26/02/2026).
+    4. Coloque TODOS os valores entre aspas duplas (ex: "valor1";"valor2").
+    5. Não inclua explicações ou textos adicionais, retorne APENAS o conteúdo do CSV.
+    6. Se houver múltiplas tabelas, consolide-as se fizerem sentido juntas.
+    7. A primeira linha deve ser obrigatoriamente o cabeçalho.
   `;
 
   try {

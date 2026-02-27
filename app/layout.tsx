@@ -13,7 +13,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'CONVERSOR SEFIN - TJPA',
+  title: 'CONVERSOR .CSV - TJPA',
   description: 'Sistema de conversão de arquivos para o Tribunal de Justiça do Pará',
 };
 
