@@ -501,36 +501,38 @@ export default function ConversorCsv() {
                 animate={{ opacity: 1, y: 0 }}
                 className="space-y-6"
               >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between px-2 gap-4">
-                  <div className="flex items-center gap-3">
-                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Fila de Processamento</h3>
-                    <span className="px-2 py-0.5 bg-slate-200 text-slate-600 rounded-md text-[10px] font-bold">{files.length}</span>
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between px-2">
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Fila de Processamento</h3>
+                      <span className="px-2 py-0.5 bg-slate-200 text-slate-600 rounded-md text-[10px] font-bold">{files.length}</span>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 px-2 sm:px-0">
                     {files.some(f => f.status === 'completed') && (
                       <>
                         <button 
                           onClick={() => clearQueue(true)}
-                          className="px-3 py-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                          className="px-3 py-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-center"
                         >
                           Limpar
                         </button>
                         <div className="flex items-center bg-emerald-50 p-1 rounded-xl border border-emerald-100">
                           <button 
                             onClick={() => downloadAllZip('csv')}
-                            className="px-2 sm:px-3 py-1.5 hover:bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1 sm:gap-2"
+                            className="flex-1 sm:flex-initial px-3 py-1.5 hover:bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                             title="Baixar ZIP com CSVs"
                           >
                             <Archive size={12} />
-                            <span className="hidden xs:inline">ZIP</span> (CSV)
+                            (CSV)
                           </button>
                           <button 
                             onClick={() => downloadAllZip('txt')}
-                            className="px-2 sm:px-3 py-1.5 hover:bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1 sm:gap-2"
+                            className="flex-1 sm:flex-initial px-3 py-1.5 hover:bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                             title="Baixar ZIP com TXTs"
                           >
                             <FileText size={12} />
-                            <span className="hidden xs:inline">ZIP</span> (TXT)
+                            (TXT)
                           </button>
                         </div>
 
@@ -538,19 +540,19 @@ export default function ConversorCsv() {
                           <div className="flex items-center gap-1 bg-blue-50 p-1 rounded-xl border border-blue-100">
                             <button 
                               onClick={() => combineAndDownload('csv')}
-                              className="px-3 py-1.5 hover:bg-blue-100 text-blue-700 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1 sm:gap-2"
+                              className="flex-1 sm:flex-initial px-3 py-1.5 hover:bg-blue-100 text-blue-700 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                               title="Mesclar em CSV único"
                             >
                               <FileStack size={12} />
-                              <span className="hidden xs:inline">Mesclar</span> (CSV)
+                              Mesclar (CSV)
                             </button>
                             <button 
                               onClick={() => combineAndDownload('txt')}
-                              className="px-3 py-1.5 hover:bg-blue-100 text-blue-700 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1 sm:gap-2"
+                              className="flex-1 sm:flex-initial px-3 py-1.5 hover:bg-blue-100 text-blue-700 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                               title="Mesclar em TXT único"
                             >
                               <FileText size={12} />
-                              <span className="hidden xs:inline">Mesclar</span> (TXT)
+                              Mesclar (TXT)
                             </button>
                           </div>
                         )}
@@ -559,7 +561,7 @@ export default function ConversorCsv() {
                     <button 
                       onClick={processAll}
                       disabled={isProcessingAll || files.every(f => f.status !== 'idle')}
-                      className="px-4 sm:px-8 py-2 sm:py-3 bg-slate-900 text-white rounded-xl sm:rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-widest hover:bg-emerald-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300 shadow-xl shadow-slate-200 flex items-center gap-2 sm:gap-3"
+                      className="w-full sm:w-auto px-4 sm:px-8 py-3 bg-slate-900 text-white rounded-xl sm:rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-widest hover:bg-emerald-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300 shadow-xl shadow-slate-200 flex items-center justify-center gap-2 sm:gap-3"
                     >
                       {isProcessingAll ? <Loader2 className="animate-spin" size={14} /> : <FileSpreadsheet size={14} />}
                       {isProcessingAll ? "Processando..." : "Processar Tudo"}
