@@ -32,6 +32,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 import { convertFileToCsv } from '@/lib/gemini';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -312,23 +313,10 @@ export default function ConversorCsv() {
     const fileName = `${fileStatus.name.replace(/\.[^/.]+$/, '')}_convertido.${extension}`;
     const content = cleanCsvResult(fileStatus.result);
     
-    // Cria blob diretamente no client com BOM para UTF-8
     const BOM = '\uFEFF';
     const mimeType = format === 'txt' ? 'text/plain' : 'text/csv';
     const blob = new Blob([BOM + content], { type: `${mimeType};charset=utf-8` });
-    const url = window.URL.createObjectURL(blob);
-    
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    
-    setTimeout(() => {
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-    }, 200);
+    saveAs(blob, fileName);
   };
 
   const downloadAllZip = async (format: 'csv' | 'txt' = 'csv') => {
@@ -345,18 +333,7 @@ export default function ConversorCsv() {
     });
 
     const zipBlob = await zip.generateAsync({ type: 'blob' });
-    const zipFileName = `CONVERSOR_CSV_LOTE_${Date.now()}.zip`;
-    const url = window.URL.createObjectURL(zipBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = zipFileName;
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-    }, 200);
+    saveAs(zipBlob, `CONVERSOR_CSV_LOTE_${Date.now()}.zip`);
     addToast(`ZIP (${format.toUpperCase()}) gerado com sucesso`, 'success');
   };
 
@@ -406,23 +383,10 @@ export default function ConversorCsv() {
     const extension = format === 'csv' ? 'csv' : 'txt';
     const fileName = `CONVERSOR_CSV_MESCLADO_${Date.now()}.${extension}`;
 
-    // Cria blob diretamente no client com BOM para UTF-8
     const BOM = '\uFEFF';
     const mimeType = format === 'txt' ? 'text/plain' : 'text/csv';
     const blob = new Blob([BOM + resultString], { type: `${mimeType};charset=utf-8` });
-    const url = window.URL.createObjectURL(blob);
-    
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    
-    setTimeout(() => {
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-    }, 200);
+    saveAs(blob, fileName);
     
     addToast(`Arquivos mesclados (${format.toUpperCase()}) com sucesso`, 'success');
   };
