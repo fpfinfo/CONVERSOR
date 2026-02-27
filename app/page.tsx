@@ -65,7 +65,7 @@ export default function ConversorCsv() {
     }
   }, []);
   const [animateIcon, setAnimateIcon] = useState(false);
-  const [previewData, setPreviewData] = useState<{ id: string, name: string, data: any[] } | null>(null);
+  const [previewData, setPreviewData] = useState<{ id: string, name: string, data: any[], totalRows: number } | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
@@ -370,14 +370,17 @@ export default function ConversorCsv() {
 
   const openPreview = (fileStatus: FileStatus) => {
     if (!fileStatus.result) return;
-    const parsed = Papa.parse(fileStatus.result, { 
+    const cleaned = cleanCsvResult(fileStatus.result);
+    const parsed = Papa.parse(cleaned, { 
       header: false,
-      delimiter: ";" 
+      delimiter: ";",
+      skipEmptyLines: true,
     });
     setPreviewData({
       id: fileStatus.id,
       name: fileStatus.name,
-      data: parsed.data.slice(0, 11) as any[] // Header + 10 rows
+      data: parsed.data.slice(0, 21) as any[], // Header + 20 rows
+      totalRows: (parsed.data as any[]).length - 1, // Exclude header
     });
   };
 
