@@ -161,6 +161,50 @@ export default function ConversorCsv() {
     }
   };
 
+  // Helper para limpar artefatos markdown
+  const cleanCsvResult = (raw: string) =>
+    raw.replace(/^```(?:csv|txt)?\n?/gm, '').replace(/```$/gm, '').trim();
+
+  // Normaliza qualquer CSV para o padrão brasileiro: ; como delimitador, , como decimal, aspas duplas
+  const normalizeToBrazilianCsv = (rawCsv: string): string => {
+    const cleaned = cleanCsvResult(rawCsv);
+    
+    // Detecta o delimitador mais provável
+    const firstLine = cleaned.split('\n')[0] || '';
+    const semicolonCount = (firstLine.match(/;/g) || []).length;
+    const commaCount = (firstLine.match(/,/g) || []).length;
+    const tabCount = (firstLine.match(/\t/g) || []).length;
+    
+    let detectedDelimiter = ';';
+    if (tabCount > semicolonCount && tabCount > commaCount) detectedDelimiter = '\t';
+    else if (commaCount > semicolonCount) detectedDelimiter = ',';
+    
+    const parsed = Papa.parse(cleaned, {
+      header: false,
+      skipEmptyLines: true,
+      delimiter: detectedDelimiter,
+    });
+
+    // Converte decimais: troca ponto por vírgula em valores numéricos
+    const formattedData = (parsed.data as string[][]).map(row =>
+      row.map(cell => {
+        if (typeof cell !== 'string') return cell;
+        const trimmed = cell.trim();
+        // Detecta padrão numérico com ponto decimal (ex: 1234.56 ou 1,234.56)
+        if (/^-?[\d,]*\.\d+$/.test(trimmed)) {
+          // Remove separador de milhar (vírgula) e troca ponto decimal por vírgula
+          return trimmed.replace(/,/g, '').replace('.', ',');
+        }
+        return cell;
+      })
+    );
+
+    return Papa.unparse(formattedData, {
+      quotes: true,
+      delimiter: ';',
+    });
+  };
+
   const processFile = async (fileStatus: FileStatus) => {
     const { file, id, name, type } = fileStatus;
     if (!file && fileStatus.status === 'idle') return;
@@ -185,6 +229,7 @@ export default function ConversorCsv() {
         
         csvResult = Papa.unparse(formattedData, {
           quotes: true,
+          quoteChar: '"',
           delimiter: ";",
         });
       } else if (name.endsWith('.csv')) {
@@ -206,6 +251,7 @@ export default function ConversorCsv() {
         
         csvResult = Papa.unparse(formattedData, {
           quotes: true,
+          quoteChar: '"',
           delimiter: ";",
         });
       } else if ((type || '').startsWith('image/') || name.endsWith('.pdf')) {
@@ -228,7 +274,8 @@ export default function ConversorCsv() {
           else if (name.endsWith('.heic')) finalType = 'image/heic';
           else if (name.endsWith('.heif')) finalType = 'image/heif';
         }
-        csvResult = await convertFileToCsv(base64, finalType);
+        const rawResult = await convertFileToCsv(base64, finalType);
+        csvResult = normalizeToBrazilianCsv(rawResult);
       }
 
       setFiles(prev => prev.map(f => f.id === id ? { 
@@ -257,9 +304,6 @@ export default function ConversorCsv() {
     setIsProcessingAll(false);
   };
 
-  // Helper para limpar artefatos markdown
-  const cleanCsvResult = (raw: string) =>
-    raw.replace(/^```(?:csv|txt)?\n?/gm, '').replace(/```$/gm, '').trim();
 
   const downloadFile = async (fileStatus: FileStatus, format: 'csv' | 'txt' = 'csv') => {
     if (!fileStatus.result) return;
