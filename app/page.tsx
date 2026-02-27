@@ -28,7 +28,7 @@ import {
   Archive,
   FileStack
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
@@ -65,7 +65,7 @@ export default function ConversorCsv() {
     }
   }, []);
   const [animateIcon, setAnimateIcon] = useState(false);
-  const [previewData, setPreviewData] = useState<{ name: string, data: any[] } | null>(null);
+  const [previewData, setPreviewData] = useState<{ id: string, name: string, data: any[] } | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
@@ -304,6 +304,7 @@ export default function ConversorCsv() {
       delimiter: ";" 
     });
     setPreviewData({
+      id: fileStatus.id,
       name: fileStatus.name,
       data: parsed.data.slice(0, 11) as any[] // Header + 10 rows
     });
@@ -403,7 +404,7 @@ export default function ConversorCsv() {
             <h2 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight uppercase">Conversor Inteligente</h2>
             <p className="text-slate-500 max-w-2xl text-base sm:text-lg leading-relaxed">
               Padronização automática de arquivos para atender as exigencias do CNJ com relação a disponibilização de Dados Abertos no Portal da Transparência do TJPA. 
-              Converta planilhas, documentos e PDF em segundos com tecnologia de IA.
+              Converta planilhas, documentos e PDF em segundos.
             </p>
           </section>
 

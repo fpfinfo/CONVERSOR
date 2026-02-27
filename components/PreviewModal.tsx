@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { X, Download, FileSpreadsheet, Table as TableIcon } from 'lucide-react';
 
 interface PreviewModalProps {
