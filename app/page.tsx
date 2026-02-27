@@ -257,21 +257,42 @@ export default function ConversorCsv() {
     setIsProcessingAll(false);
   };
 
-  const downloadFile = (fileStatus: FileStatus, format: 'csv' | 'txt' = 'csv') => {
+  // Helper para limpar artefatos markdown
+  const cleanCsvResult = (raw: string) =>
+    raw.replace(/^```(?:csv|txt)?\n?/gm, '').replace(/```$/gm, '').trim();
+
+  const downloadFile = async (fileStatus: FileStatus, format: 'csv' | 'txt' = 'csv') => {
     if (!fileStatus.result) return;
     
-    const mimeType = format === 'csv' ? 'text/csv;charset=utf-8;' : 'text/plain;charset=utf-8;';
     const extension = format === 'csv' ? 'csv' : 'txt';
+    const fileName = `${fileStatus.name.replace(/\.[^/.]+$/, '')}_convertido.${extension}`;
+    const content = cleanCsvResult(fileStatus.result);
     
-    const BOM = "\uFEFF";
-    const blob = new Blob([BOM + fileStatus.result], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `${fileStatus.name.split('.')[0]}_convertido.${extension}`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      const res = await fetch('/api/download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, fileName, format }),
+      });
+
+      if (!res.ok) throw new Error('Download failed');
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }, 200);
+    } catch (error) {
+      console.error('Download error:', error);
+      addToast('Erro ao baixar arquivo', 'error');
+    }
   };
 
   const downloadAllZip = async (format: 'csv' | 'txt' = 'csv') => {
@@ -283,17 +304,23 @@ export default function ConversorCsv() {
     
     completedFiles.forEach(f => {
       const BOM = "\uFEFF";
-      zip.file(`${f.name.split('.')[0]}_convertido.${extension}`, BOM + f.result!);
+      const clean = cleanCsvResult(f.result || '');
+      zip.file(`${f.name.replace(/\.[^/.]+$/, '')}_convertido.${extension}`, BOM + clean);
     });
 
-    const content = await zip.generateAsync({ type: 'blob' });
-    const url = URL.createObjectURL(content);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `CONVERSOR_CSV_LOTE_${new Date().getTime()}.zip`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    const zipFileName = `CONVERSOR_CSV_LOTE_${Date.now()}.zip`;
+    const url = window.URL.createObjectURL(zipBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = zipFileName;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    }, 200);
     addToast(`ZIP (${format.toUpperCase()}) gerado com sucesso`, 'success');
   };
 
@@ -310,7 +337,7 @@ export default function ConversorCsv() {
     });
   };
 
-  const combineAndDownload = (format: 'csv' | 'txt' = 'csv') => {
+  const combineAndDownload = async (format: 'csv' | 'txt' = 'csv') => {
     const completedFiles = files.filter(f => f.status === 'completed' && f.result);
     if (completedFiles.length < 2) {
       addToast("Adicione pelo menos 2 arquivos concluídos para mesclar", 'info');
@@ -326,10 +353,8 @@ export default function ConversorCsv() {
         delimiter: ";"
       });
       if (index === 0) {
-        // Keep header from the first file
         combinedData = parsed.data;
       } else {
-        // Skip header for subsequent files
         combinedData = [...combinedData, ...parsed.data.slice(1)];
       }
     });
@@ -339,19 +364,35 @@ export default function ConversorCsv() {
       delimiter: ";",
     });
 
-    const mimeType = format === 'csv' ? 'text/csv;charset=utf-8;' : 'text/plain;charset=utf-8;';
     const extension = format === 'csv' ? 'csv' : 'txt';
+    const fileName = `CONVERSOR_CSV_MESCLADO_${Date.now()}.${extension}`;
 
-    const BOM = "\uFEFF";
-    const blob = new Blob([BOM + resultString], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `CONVERSOR_CSV_MESCLADO_${new Date().getTime()}.${extension}`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    addToast(`Arquivos mesclados (${format.toUpperCase()}) com sucesso`, 'success');
+    try {
+      const res = await fetch('/api/download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: resultString, fileName, format }),
+      });
+
+      if (!res.ok) throw new Error('Download failed');
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }, 200);
+      addToast(`Arquivos mesclados (${format.toUpperCase()}) com sucesso`, 'success');
+    } catch (error) {
+      console.error('Merge download error:', error);
+      addToast('Erro ao baixar arquivo mesclado', 'error');
+    }
   };
 
   return (
@@ -359,34 +400,35 @@ export default function ConversorCsv() {
       <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto w-full">
         {/* Top Header */}
-        <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
-          <div className="flex items-center gap-4">
+        <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between sticky top-0 z-20">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
             <button 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"
+              className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors shrink-0"
             >
               {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
-            <div className="h-6 w-px bg-slate-200 hidden sm:block" />
-            <div className="flex items-center gap-2 text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest truncate max-w-[150px] sm:max-w-none">
-              <span className="hidden xs:inline">Utilitários</span>
-              <ChevronRight size={14} className="hidden xs:inline" />
-              <span className="text-emerald-600">Conversor .CSV</span>
+            <div className="h-6 w-px bg-slate-200 hidden sm:block shrink-0" />
+            <div className="flex items-center gap-2 text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest min-w-0">
+              <span className="hidden sm:inline">Utilitários</span>
+              <ChevronRight size={14} className="hidden sm:inline shrink-0" />
+              <span className="text-emerald-600 truncate">Conversor .CSV</span>
             </div>
           </div>
           
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:flex flex-col items-end">
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+            <div className="hidden md:flex flex-col items-end">
               <span className="text-sm font-bold text-slate-700">Servidor Público</span>
               <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Acesso Autorizado</span>
             </div>
-            <div className="w-10 h-10 rounded-full bg-slate-200 border-2 border-white shadow-sm overflow-hidden relative">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-slate-200 border-2 border-white shadow-sm overflow-hidden relative shrink-0">
               <Image 
                 src="https://picsum.photos/seed/user/100" 
-                alt="User" 
+                alt="Avatar do servidor" 
                 fill
+                sizes="40px"
                 className="object-cover"
                 referrerPolicy="no-referrer" 
               />
@@ -394,15 +436,15 @@ export default function ConversorCsv() {
           </div>
         </header>
 
-        <main className="flex-1 p-6 md:p-10 max-w-6xl mx-auto w-full space-y-10">
+        <main className="flex-1 p-4 sm:p-6 md:p-10 max-w-6xl mx-auto w-full space-y-6 sm:space-y-10">
           {/* Hero Section */}
           <section className="space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-black uppercase tracking-widest">
               <ShieldCheck size={12} />
               Ambiente Seguro
             </div>
-            <h2 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight uppercase">Conversor Inteligente</h2>
-            <p className="text-slate-500 max-w-2xl text-base sm:text-lg leading-relaxed">
+            <h2 className="text-xl sm:text-2xl md:text-4xl font-black text-slate-900 tracking-tight uppercase">Conversor Inteligente</h2>
+            <p className="text-slate-500 max-w-2xl text-sm sm:text-base md:text-lg leading-relaxed">
               Padronização automática de arquivos para atender as exigencias do CNJ com relação a disponibilização de Dados Abertos no Portal da Transparência do TJPA. 
               Converta planilhas, documentos e PDF em segundos.
             </p>
@@ -412,7 +454,7 @@ export default function ConversorCsv() {
           <div 
             {...getRootProps()} 
             className={cn(
-              "relative group cursor-pointer rounded-[2rem] sm:rounded-[3rem] border-2 border-dashed transition-all duration-500 p-8 sm:p-16 flex flex-col items-center justify-center gap-6 bg-white shadow-xl shadow-slate-200/50",
+              "relative group cursor-pointer rounded-2xl sm:rounded-[2rem] md:rounded-[3rem] border-2 border-dashed transition-all duration-500 p-6 sm:p-8 md:p-16 flex flex-col items-center justify-center gap-4 sm:gap-6 bg-white shadow-xl shadow-slate-200/50",
               isDragActive ? "border-emerald-500 bg-emerald-50/50 scale-[0.99]" : "border-slate-200 hover:border-emerald-400 hover:bg-slate-50/50"
             )}
           >
@@ -525,7 +567,7 @@ export default function ConversorCsv() {
                   </div>
                 </div>
 
-                <div className="grid gap-4">
+                <div className="grid gap-3 sm:gap-4">
                   {files.map((fileStatus) => (
                     <motion.div
                       key={fileStatus.id}
@@ -533,21 +575,24 @@ export default function ConversorCsv() {
                       initial={{ opacity: 0, scale: 0.98 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.98 }}
-                      className="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm flex items-center gap-6 group hover:shadow-md transition-shadow"
+                      className="bg-white rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 border border-slate-100 shadow-sm flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 group hover:shadow-md transition-shadow"
                     >
                       <div className={cn(
-                        "w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105",
+                        "w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105",
                         fileStatus.name.endsWith('.pdf') ? "bg-red-50 text-red-500" : 
                         (fileStatus.type || '').startsWith('image/') ? "bg-amber-50 text-amber-500" :
                         (fileStatus.name.endsWith('.xlsm') || fileStatus.name.endsWith('.xlsx') || fileStatus.name.endsWith('.xls')) ? "bg-emerald-50 text-emerald-500" : "bg-blue-50 text-blue-500"
                       )}>
-                        {fileStatus.name.endsWith('.pdf') ? <FileText size={32} /> : 
-                         (fileStatus.type || '').startsWith('image/') ? <ImageIcon size={32} /> :
-                         <FileSpreadsheet size={32} />}
+                        {fileStatus.name.endsWith('.pdf') ? <FileText size={24} className="sm:hidden" /> : 
+                         (fileStatus.type || '').startsWith('image/') ? <ImageIcon size={24} className="sm:hidden" /> :
+                         <FileSpreadsheet size={24} className="sm:hidden" />}
+                        {fileStatus.name.endsWith('.pdf') ? <FileText size={32} className="hidden sm:block" /> : 
+                         (fileStatus.type || '').startsWith('image/') ? <ImageIcon size={32} className="hidden sm:block" /> :
+                         <FileSpreadsheet size={32} className="hidden sm:block" />}
                       </div>
                       
-                      <div className="flex-1 min-w-0">
-                        <p className="text-lg font-black text-slate-800 truncate uppercase tracking-tight">{fileStatus.name}</p>
+                      <div className="flex-1 min-w-0 w-full sm:w-auto">
+                        <p className="text-sm sm:text-lg font-black text-slate-800 truncate uppercase tracking-tight">{fileStatus.name}</p>
                         <div className="flex items-center gap-3 mt-1">
                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                             {(fileStatus.size / 1024).toFixed(1)} KB
@@ -559,7 +604,7 @@ export default function ConversorCsv() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-end sm:justify-start flex-wrap sm:flex-nowrap">
                         {fileStatus.status === 'idle' && (
                           <button 
                             onClick={() => processFile(fileStatus)}
@@ -590,10 +635,10 @@ export default function ConversorCsv() {
                               <Eye size={20} />
                             </button>
                             
-                            <div className="flex items-center bg-emerald-600 rounded-2xl shadow-lg shadow-emerald-100 overflow-hidden">
+                            <div className="flex items-center bg-emerald-600 rounded-xl sm:rounded-2xl shadow-lg shadow-emerald-100 overflow-hidden">
                               <button 
                                 onClick={() => downloadFile(fileStatus, 'csv')}
-                                className="flex items-center gap-2 px-4 py-3 text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all border-r border-emerald-500/30"
+                                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all border-r border-emerald-500/30"
                                 title="Baixar CSV"
                               >
                                 <Download size={14} />
@@ -601,7 +646,7 @@ export default function ConversorCsv() {
                               </button>
                               <button 
                                 onClick={() => downloadFile(fileStatus, 'txt')}
-                                className="flex items-center gap-2 px-4 py-3 text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all"
+                                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all"
                                 title="Baixar TXT"
                               >
                                 <FileText size={14} />
@@ -620,10 +665,11 @@ export default function ConversorCsv() {
 
                         <button 
                           onClick={() => removeFile(fileStatus.id)}
-                          className="w-12 h-12 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all duration-300"
+                          className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl sm:rounded-2xl transition-all duration-300"
                           title="Remover"
                         >
-                          <Trash2 size={20} />
+                          <Trash2 size={18} className="sm:hidden" />
+                          <Trash2 size={20} className="hidden sm:block" />
                         </button>
                       </div>
                     </motion.div>
@@ -637,10 +683,11 @@ export default function ConversorCsv() {
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="text-center py-24 space-y-6"
+              className="text-center py-12 sm:py-24 space-y-4 sm:space-y-6"
             >
-              <div className="inline-flex items-center justify-center w-24 h-24 rounded-[2rem] bg-white text-slate-200 shadow-sm border border-slate-100">
-                <FileSpreadsheet size={48} />
+              <div className="inline-flex items-center justify-center w-16 h-16 sm:w-24 sm:h-24 rounded-2xl sm:rounded-[2rem] bg-white text-slate-200 shadow-sm border border-slate-100">
+                <FileSpreadsheet size={32} className="sm:hidden" />
+                <FileSpreadsheet size={48} className="hidden sm:block" />
               </div>
               <div className="space-y-2">
                 <p className="text-slate-400 font-black uppercase tracking-[0.2em]">Nenhum arquivo na fila</p>
@@ -651,7 +698,7 @@ export default function ConversorCsv() {
         </main>
 
         {/* Footer */}
-        <footer className="p-8 text-center border-t border-slate-100 bg-white/50">
+        <footer className="p-4 sm:p-8 text-center border-t border-slate-100 bg-white/50">
           <p className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-[0.2em] leading-relaxed">
             @ Tribunal de Justiça do Estado do Pará - Laboratório de Inovação da SEFIN.
           </p>

@@ -42,8 +42,13 @@ export async function convertFileToCsv(base64Data: string, mimeType: string): Pr
     });
 
     const text = response.text || "";
-    // Clean up markdown code blocks if present
-    return text.replace(/```csv\n?|```/g, "").trim();
+    // Clean up markdown code blocks and any surrounding text
+    return text
+      .replace(/^[\s\S]*?```(?:csv|txt|plaintext)?\n?/m, '')  // Remove everything before first code block
+      .replace(/```[\s\S]*$/m, '')  // Remove closing ``` and everything after
+      .replace(/^```(?:csv|txt|plaintext)?\n?/gm, '')  // Fallback: clean remaining opening blocks
+      .replace(/```$/gm, '')  // Fallback: clean remaining closing blocks
+      .trim();
   } catch (error) {
     console.error("Error converting file to CSV:", error);
     throw new Error(`Falha ao processar ${isImage ? 'a imagem' : 'o PDF'} com IA.`);

@@ -23,7 +23,7 @@ interface ToastContainerProps {
 
 export function ToastContainer({ toasts, onClose }: ToastContainerProps) {
   return (
-    <div className="fixed bottom-8 right-8 z-[60] flex flex-col gap-3 pointer-events-none">
+    <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:bottom-8 sm:right-8 z-[60] flex flex-col gap-3 pointer-events-none">
       <AnimatePresence>
         {toasts.map(toast => (
           <motion.div
@@ -32,7 +32,7 @@ export function ToastContainer({ toasts, onClose }: ToastContainerProps) {
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
             className={cn(
-              "pointer-events-auto px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 min-w-[300px] border",
+              "pointer-events-auto px-4 sm:px-6 py-3 sm:py-4 rounded-xl sm:rounded-2xl shadow-2xl flex items-center gap-3 sm:gap-4 sm:min-w-[300px] border",
               toast.type === 'success' ? "bg-emerald-600 text-white border-emerald-500" :
               toast.type === 'error' ? "bg-red-600 text-white border-red-500" :
               "bg-slate-900 text-white border-slate-800"
