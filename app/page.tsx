@@ -305,38 +305,30 @@ export default function ConversorCsv() {
   };
 
 
-  const downloadFile = async (fileStatus: FileStatus, format: 'csv' | 'txt' = 'csv') => {
+  const downloadFile = (fileStatus: FileStatus, format: 'csv' | 'txt' = 'csv') => {
     if (!fileStatus.result) return;
     
     const extension = format === 'csv' ? 'csv' : 'txt';
     const fileName = `${fileStatus.name.replace(/\.[^/.]+$/, '')}_convertido.${extension}`;
     const content = cleanCsvResult(fileStatus.result);
     
-    try {
-      const res = await fetch('/api/download', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, fileName, format }),
-      });
-
-      if (!res.ok) throw new Error('Download failed');
-
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => {
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-      }, 200);
-    } catch (error) {
-      console.error('Download error:', error);
-      addToast('Erro ao baixar arquivo', 'error');
-    }
+    // Cria blob diretamente no client com BOM para UTF-8
+    const BOM = '\uFEFF';
+    const mimeType = format === 'txt' ? 'text/plain' : 'text/csv';
+    const blob = new Blob([BOM + content], { type: `${mimeType};charset=utf-8` });
+    const url = window.URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    
+    setTimeout(() => {
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    }, 200);
   };
 
   const downloadAllZip = async (format: 'csv' | 'txt' = 'csv') => {
@@ -384,7 +376,7 @@ export default function ConversorCsv() {
     });
   };
 
-  const combineAndDownload = async (format: 'csv' | 'txt' = 'csv') => {
+  const combineAndDownload = (format: 'csv' | 'txt' = 'csv') => {
     const completedFiles = files.filter(f => f.status === 'completed' && f.result);
     if (completedFiles.length < 2) {
       addToast("Adicione pelo menos 2 arquivos concluídos para mesclar", 'info');
@@ -414,32 +406,25 @@ export default function ConversorCsv() {
     const extension = format === 'csv' ? 'csv' : 'txt';
     const fileName = `CONVERSOR_CSV_MESCLADO_${Date.now()}.${extension}`;
 
-    try {
-      const res = await fetch('/api/download', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: resultString, fileName, format }),
-      });
-
-      if (!res.ok) throw new Error('Download failed');
-
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => {
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-      }, 200);
-      addToast(`Arquivos mesclados (${format.toUpperCase()}) com sucesso`, 'success');
-    } catch (error) {
-      console.error('Merge download error:', error);
-      addToast('Erro ao baixar arquivo mesclado', 'error');
-    }
+    // Cria blob diretamente no client com BOM para UTF-8
+    const BOM = '\uFEFF';
+    const mimeType = format === 'txt' ? 'text/plain' : 'text/csv';
+    const blob = new Blob([BOM + resultString], { type: `${mimeType};charset=utf-8` });
+    const url = window.URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    
+    setTimeout(() => {
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    }, 200);
+    
+    addToast(`Arquivos mesclados (${format.toUpperCase()}) com sucesso`, 'success');
   };
 
   return (
