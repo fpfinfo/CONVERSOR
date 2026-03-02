@@ -13,18 +13,11 @@ import {
   FileSpreadsheet,
   Trash2,
   ChevronRight,
-  LayoutDashboard,
-  Users,
-  Briefcase,
-  Gavel,
   ShieldCheck,
-  Settings,
   Menu,
   X,
   Image as ImageIcon,
   Eye,
-  Eraser,
-  Bell,
   Archive,
   FileStack
 } from 'lucide-react';
@@ -306,7 +299,7 @@ export default function ConversorCsv() {
 
 
   // Método corporativo definitivo para download
-  const downloadViaForm = (content: string, fileName: string, format: 'csv' | 'txt') => {
+  const downloadViaForm = (content: string, fileName: string) => {
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = '/api/download';
@@ -325,7 +318,7 @@ export default function ConversorCsv() {
     const formatInput = document.createElement('input');
     formatInput.type = 'hidden';
     formatInput.name = 'format';
-    formatInput.value = format;
+    formatInput.value = 'csv';
 
     form.appendChild(contentInput);
     form.appendChild(fileNameInput);
@@ -338,36 +331,29 @@ export default function ConversorCsv() {
     }, 100);
   };
 
-  const downloadFile = (fileStatus: FileStatus, format: 'csv' | 'txt' = 'csv') => {
+  const downloadFile = (fileStatus: FileStatus) => {
     if (!fileStatus.result) return;
     
-    const extension = format === 'csv' ? 'csv' : 'txt';
-    const fileName = `${fileStatus.name.replace(/\.[^/.]+$/, '')}_convertido.${extension}`;
+    const fileName = `${fileStatus.name.replace(/\.[^/.]+$/, '')}_convertido.csv`;
     const content = cleanCsvResult(fileStatus.result);
     
-    downloadViaForm(content, fileName, format);
+    downloadViaForm(content, fileName);
   };
 
-  const downloadAllZip = async (format: 'csv' | 'txt' = 'csv') => {
+  const downloadAllZip = async () => {
     const completedFiles = files.filter(f => f.status === 'completed' && f.result);
     if (completedFiles.length === 0) return;
 
     const zip = new JSZip();
-    const extension = format === 'csv' ? 'csv' : 'txt';
     
     completedFiles.forEach(f => {
       const BOM = "\uFEFF";
       const clean = cleanCsvResult(f.result || '');
-      zip.file(`${f.name.replace(/\.[^/.]+$/, '')}_convertido.${extension}`, BOM + clean);
+      zip.file(`${f.name.replace(/\.[^/.]+$/, '')}_convertido.csv`, BOM + clean);
     });
 
     const zipBlob = await zip.generateAsync({ type: 'blob' });
     
-    // O JSZip cria BLOB, zip é mais seguro com objectURL ou formData?
-    // Formulários são ruins para blobs binários diretamente sem FormData+XHRequest.
-    // Vamos voltar o file-saver ou objectURL só pro ZIP, e POST /api pro CSV.
-    // Pra garantir, ZIP não tem problema no Edge com "a.download" pois é action restrita? 
-    // Na verdade, no caso de ZIP é binário. O file-saver ou URL é a única via local.
     const url = window.URL.createObjectURL(zipBlob);
     const a = document.createElement('a');
     a.href = url;
@@ -380,7 +366,7 @@ export default function ConversorCsv() {
       window.URL.revokeObjectURL(url);
     }, 200);
     
-    addToast(`ZIP (${format.toUpperCase()}) gerado com sucesso`, 'success');
+    addToast('ZIP (CSV) gerado com sucesso', 'success');
   };
 
   const openPreview = (fileStatus: FileStatus) => {
@@ -399,7 +385,7 @@ export default function ConversorCsv() {
     });
   };
 
-  const combineAndDownload = (format: 'csv' | 'txt' = 'csv') => {
+  const combineAndDownload = () => {
     const completedFiles = files.filter(f => f.status === 'completed' && f.result);
     if (completedFiles.length < 2) {
       addToast("Adicione pelo menos 2 arquivos concluídos para mesclar", 'info');
@@ -426,12 +412,11 @@ export default function ConversorCsv() {
       delimiter: ";",
     });
 
-    const extension = format === 'csv' ? 'csv' : 'txt';
-    const fileName = `CONVERSOR_CSV_MESCLADO_${Date.now()}.${extension}`;
+    const fileName = `CONVERSOR_CSV_MESCLADO_${Date.now()}.csv`;
 
-    downloadViaForm(resultString, fileName, format);
+    downloadViaForm(resultString, fileName);
     
-    addToast(`Arquivos mesclados (${format.toUpperCase()}) com sucesso`, 'success');
+    addToast('Arquivos mesclados (CSV) com sucesso', 'success');
   };
 
   return (
@@ -556,44 +541,24 @@ export default function ConversorCsv() {
                         >
                           Limpar
                         </button>
-                        <div className="flex items-center bg-emerald-50 p-1 rounded-xl border border-emerald-100">
-                          <button 
-                            onClick={() => downloadAllZip('csv')}
-                            className="flex-1 sm:flex-initial px-3 py-1.5 hover:bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
-                            title="Baixar ZIP com CSVs"
-                          >
-                            <Archive size={12} />
-                            (CSV)
-                          </button>
-                          <button 
-                            onClick={() => downloadAllZip('txt')}
-                            className="flex-1 sm:flex-initial px-3 py-1.5 hover:bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
-                            title="Baixar ZIP com TXTs"
-                          >
-                            <FileText size={12} />
-                            (TXT)
-                          </button>
-                        </div>
+                        <button 
+                          onClick={() => downloadAllZip()}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl border border-emerald-100 text-[10px] font-black uppercase tracking-widest transition-all"
+                          title="Baixar ZIP com CSVs"
+                        >
+                          <Archive size={12} />
+                          ZIP (CSV)
+                        </button>
 
                         {files.filter(f => f.status === 'completed').length >= 2 && (
-                          <div className="flex items-center gap-1 bg-blue-50 p-1 rounded-xl border border-blue-100">
-                            <button 
-                              onClick={() => combineAndDownload('csv')}
-                              className="flex-1 sm:flex-initial px-3 py-1.5 hover:bg-blue-100 text-blue-700 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
-                              title="Mesclar em CSV único"
-                            >
-                              <FileStack size={12} />
-                              Mesclar (CSV)
-                            </button>
-                            <button 
-                              onClick={() => combineAndDownload('txt')}
-                              className="flex-1 sm:flex-initial px-3 py-1.5 hover:bg-blue-100 text-blue-700 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
-                              title="Mesclar em TXT único"
-                            >
-                              <FileText size={12} />
-                              Mesclar (TXT)
-                            </button>
-                          </div>
+                          <button 
+                            onClick={() => combineAndDownload()}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl border border-blue-100 text-[10px] font-black uppercase tracking-widest transition-all"
+                            title="Mesclar em CSV único"
+                          >
+                            <FileStack size={12} />
+                            Mesclar (CSV)
+                          </button>
                         )}
                       </>
                     )}
@@ -676,24 +641,14 @@ export default function ConversorCsv() {
                               <Eye size={20} />
                             </button>
                             
-                            <div className="flex items-center bg-emerald-600 rounded-xl sm:rounded-2xl shadow-lg shadow-emerald-100 overflow-hidden">
-                              <button 
-                                onClick={() => downloadFile(fileStatus, 'csv')}
-                                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all border-r border-emerald-500/30"
-                                title="Baixar CSV"
-                              >
-                                <Download size={14} />
-                                CSV
-                              </button>
-                              <button 
-                                onClick={() => downloadFile(fileStatus, 'txt')}
-                                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all"
-                                title="Baixar TXT"
-                              >
-                                <FileText size={14} />
-                                TXT
-                              </button>
-                            </div>
+                            <button 
+                              onClick={() => downloadFile(fileStatus)}
+                              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2.5 sm:py-3 bg-emerald-600 text-white rounded-xl sm:rounded-2xl shadow-lg shadow-emerald-100 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all"
+                              title="Baixar CSV"
+                            >
+                              <Download size={14} />
+                              CSV
+                            </button>
                           </div>
                         )}
 

@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     }
 
     const BOM = "\uFEFF";
-    const mimeType = format === 'txt' ? 'text/plain' : 'text/csv';
+    const mimeType = 'text/csv';
     const fileContent = BOM + content;
 
     return new NextResponse(fileContent, {
